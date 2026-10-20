@@ -1920,9 +1920,18 @@ jobs:
             [ -z "$name" ] && continue
             if [ ! -d "release-assets/${name}" ]; then
               echo "Re-fetching missed artifact: $name"
-              if ! gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${name}" \
-                --jq 'if .artifacts and (.artifacts | length) > 0 then .artifacts[0].archive_download_url else empty end' \
-                | xargs -r curl -fsSL -o "release-assets/${name}.zip"; then
+              ART_URL=$(gh api \
+                "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${name}" \
+                --jq 'if .artifacts and (.artifacts | length) > 0 then .artifacts[0].archive_download_url else empty end')
+
+              if [ -z "$ART_URL" ]; then
+                echo "ERROR: artifact ${name} not found in run ${{ github.run_id }}" >&2
+                missing=$((missing + 1))
+              elif ! curl -fsSL --retry 5 --retry-delay 5 --retry-all-errors \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -o "release-assets/${name}.zip" \
+                "$ART_URL"; then
                 echo "ERROR: failed to re-fetch $name" >&2
                 missing=$((missing + 1))
               else
