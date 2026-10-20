@@ -1921,7 +1921,8 @@ jobs:
             if [ ! -d "release-assets/${name}" ]; then
               echo "Re-fetching missed artifact: $name"
               if ! gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${name}" \
-                --jq '.[0].archive_download_url' | xargs -r curl -fsSL -o "release-assets/${name}.zip"; then
+                --jq 'if .artifacts and (.artifacts | length) > 0 then .artifacts[0].archive_download_url else empty end' \
+                | xargs -r curl -fsSL -o "release-assets/${name}.zip"; then
                 echo "ERROR: failed to re-fetch $name" >&2
                 missing=$((missing + 1))
               else
