@@ -886,7 +886,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: NoMount-Metamodule
-          path: ${{ steps.buildmod.outputs.module_dir }}
+          path: ${{ steps.buildmod.outputs.module_path }}
           if-no-files-found: error
           compression-level: 0
 
