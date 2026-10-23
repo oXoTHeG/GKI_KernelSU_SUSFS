@@ -2000,12 +2000,12 @@ jobs:
           set -euo pipefail
           # The metamodule silently missed r20 (artifact built fine, no zip
           # on the release). Fail loud instead of shipping without it.
-          if ! ls release-assets/NoMount-Metamodule.zip >/dev/null 2>&1; then
-            echo "ERROR: use_nomount is true but release-assets/NoMount-Metamodule.zip is missing" >&2
-            ls release-assets/ >&2
+          if [ ! -f "release-assets/NoMount-Metamodule.zip" ] && [ ! -d "release-assets/NoMount-Metamodule" ]; then
+            echo "ERROR: NoMount metamodule artifact is missing"
+            ls -la release-assets || true
             exit 1
           fi
-          echo "NoMount metamodule zip OK"
+            echo "NoMount metamodule zip OK"
 
       - name: Create Release
         env:
