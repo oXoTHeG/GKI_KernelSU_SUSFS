@@ -1921,14 +1921,31 @@ jobs:
             [ -z "$name" ] && continue
             if [ ! -d "release-assets/${name}" ]; then
               echo "Re-fetching missed artifact: $name"
-              if ! gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${name}" \
-                --jq '.artifacts[0].archive_download_url // empty' | xargs -r curl -fsSL -o "release-assets/${name}.zip"; then
+
+              archive_url=$(gh api \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${name}" \
+                --jq '.artifacts[0].archive_download_url // empty')
+
+              if [ -z "$archive_url" ]; then
+                echo "ERROR: artifact $name not found in run" >&2
+                missing=$((missing + 1))
+                continue
+              fi
+
+              if ! curl -fsSL \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Accept: application/vnd.github+json" \
+                -o "release-assets/${name}.zip" \
+                "$archive_url"; then
                   echo "ERROR: failed to re-fetch $name" >&2
                   missing=$((missing + 1))
-              else
-                mkdir -p "release-assets/${name}" && unzip -q -o "release-assets/${name}.zip" -d "release-assets/${name}"
-                rm -f "release-assets/${name}.zip"
+                  continue
               fi
+
+              mkdir -p "release-assets/${name}" && unzip -q -o "release-assets/${name}.zip" -d "release-assets/${name}"
+              rm -f "release-assets/${name}.zip"
             fi
           done < <(grep '\-AnyKernel3$' "$names" || true)
           rm -f "$names"
