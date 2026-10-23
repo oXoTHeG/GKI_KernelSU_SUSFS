@@ -54,12 +54,12 @@ runs:
         set -euo pipefail
         mkdir -p release-assets
 
-        # Page explicitly instead of --paginate: --paginate has been observed
-        # to stop early on runs carrying >1000 artifacts (1129 of 1229 on run
-        # 36828639322), which silently undercounts the target.
         names=$(mktemp)
         for page in $(seq 1 50); do
-          batch=$(gh api "repos/${{ github.repository }}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100&page=${page}" \
+          batch=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "repos/${{ github.repository }}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100&page=${page}" \
             --jq '.artifacts[].name' || true)
           [ -z "$batch" ] && break
           printf '%s\n' "$batch" >> "$names"
@@ -70,51 +70,48 @@ runs:
         mapfile -t ak3 < <(grep -E '\-AnyKernel3$' "$names" | sort -u)
         rm -f "$names"
 
-        if [[ "${#ak3[@]}" -eq 0 ]]; then
-          echo "ERROR: no *-AnyKernel3 artifacts in run ${SOURCE_RUN_ID}" >&2
-          exit 1
-        fi
-        echo "Found ${#ak3[@]} AnyKernel3 artifacts in run ${SOURCE_RUN_ID}"
+        echo "Found ${#ak3[@]} AnyKernel3 artifacts"
 
-        # Fetch each artifact individually by name. actions/download-artifact's
-        # pattern match silently under-matched on a run this large (496 of 609
-        # on 36828639322) while still exiting 0, so per-name fetch is the only
-        # reliable path here. Sequential to stay under API rate limits.
-        failed=0
-        n=0
         for name in "${ak3[@]}"; do
-          n=$((n + 1))
           dest="release-assets/${name}"
           [[ -d "$dest" ]] && continue
-          echo "[${n}/${#ak3[@]}] ${name}"
-          url=$(gh api "repos/${{ github.repository }}/actions/runs/${SOURCE_RUN_ID}/artifacts?name=${name}" \
-            --jq '.artifacts[0].archive_download_url // empty')
-          if [[ -z "$url" ]]; then
-            echo "  ERROR: no archive_download_url for ${name}" >&2
-            failed=$((failed + 1))
-            continue
-          fi
-          if ! curl -fsSL --retry 3 --retry-delay 2 -H "Authorization: Bearer ${GH_TOKEN}" \
-               -o /tmp/ak3.zip "$url"; then
-            echo "  ERROR: download failed for ${name}" >&2
-            failed=$((failed + 1))
-            continue
-          fi
+
+          artifact=$(gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "repos/${{ github.repository }}/actions/runs/${SOURCE_RUN_ID}/artifacts?name=${name}" \
+            --jq '.artifacts[0] // empty')
+
+          [[ -n "$artifact" ]] || {
+            echo "ERROR: artifact missing: ${name}" >&2
+            exit 1
+          }
+
+          artifact_id=$(jq -r '.id // empty' <<<"$artifact")
+          [[ -n "$artifact_id" ]] || {
+            echo "ERROR: no artifact id for ${name}" >&2
+            exit 1
+          }
+
+          gh api \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "repos/${{ github.repository }}/actions/artifacts/${artifact_id}/zip" \
+            --output /tmp/ak3.zip || {
+              echo "ERROR: failed to download ${name}" >&2
+              exit 1
+            }
+
           mkdir -p "$dest"
-          if ! unzip -q -o /tmp/ak3.zip -d "$dest"; then
-            echo "  ERROR: unzip failed for ${name}" >&2
-            failed=$((failed + 1))
-            rm -rf "$dest"
-          fi
+          unzip -q -o /tmp/ak3.zip -d "$dest"
+          rm -f /tmp/ak3.zip
         done
-        rm -f /tmp/ak3.zip
 
         got=$(find release-assets -maxdepth 1 -type d -name '*-AnyKernel3' | wc -l)
-        echo "AnyKernel3 artifacts expected: ${#ak3[@]}, downloaded: ${got}, failed: ${failed}"
-        if [[ "$failed" -ne 0 || "$got" -ne "${#ak3[@]}" ]]; then
-          echo "ERROR: incomplete artifact set (${got}/${#ak3[@]}, ${failed} failed)" >&2
+        [[ "$got" -eq "${#ak3[@]}" ]] || {
+          echo "ERROR: downloaded $got of ${#ak3[@]} AnyKernel3 artifacts" >&2
           exit 1
-        fi
+        }
 
     - name: Download manager APK zips from source run
       shell: bash
