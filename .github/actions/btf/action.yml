@@ -124,7 +124,9 @@ runs:
         # Refresh apt metadata first to avoid runner mirror 404s on liblzma-dev.
         export DEBIAN_FRONTEND=noninteractive
         export APT_LISTCHANGES_FRONTEND=none
-        export Acquire::Retries="3"
+        sudo apt-get -o Acquire::Retries=3 update -qq
+        sudo apt-get -o Acquire::Retries=3 install -y --no-install-recommends --fix-missing \
+          cmake gcc libdw-dev libelf-dev zlib1g-dev dwarves
 
         ok=0
         for attempt in 1 2 3; do
