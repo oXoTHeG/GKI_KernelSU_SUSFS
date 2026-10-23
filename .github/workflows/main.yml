@@ -1898,6 +1898,7 @@ jobs:
           # Page the artifact list explicitly rather than with --paginate. On a
           # run this large --paginate has been observed to stop early (1129 of
           # 1229 artifacts), which silently undercounts the target.
+          
           names=$(mktemp)
           for page in $(seq 1 50); do
             batch=$(gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?per_page=100&page=${page}" \
@@ -1921,9 +1922,9 @@ jobs:
             if [ ! -d "release-assets/${name}" ]; then
               echo "Re-fetching missed artifact: $name"
               if ! gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts?name=${name}" \
-                --jq '.[0].archive_download_url' | xargs -r curl -fsSL -o "release-assets/${name}.zip"; then
-                echo "ERROR: failed to re-fetch $name" >&2
-                missing=$((missing + 1))
+                --jq '.artifacts[0].archive_download_url // empty' | xargs -r curl -fsSL -o "release-assets/${name}.zip"; then
+                  echo "ERROR: failed to re-fetch $name" >&2
+                  missing=$((missing + 1))
               else
                 mkdir -p "release-assets/${name}" && unzip -q -o "release-assets/${name}.zip" -d "release-assets/${name}"
                 rm -f "release-assets/${name}.zip"
