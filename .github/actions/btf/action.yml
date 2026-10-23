@@ -121,14 +121,23 @@ runs:
         # old in-tree libbpf there only handles BTF kinds 1-15 and EINVALs on
         # enum64/decl_tag/type_tag. Newer sublevels pass --skip_encoding_btf_enum64
         # via pahole-flags.sh already; duplicate skip flags are harmless.
-        # Same dpkg-state recovery as setup-build-environment's BTF deps
-        # step: runner images occasionally ship with 'dpkg was interrupted'
-        # (exit 100), which dpkg --configure -a repairs. Retry up to 3x.
+        # Refresh apt metadata first to avoid runner mirror 404s on liblzma-dev.
+        export DEBIAN_FRONTEND=noninteractive
+        export APT_LISTCHANGES_FRONTEND=none
+        export Acquire::Retries="3"
+
         ok=0
         for attempt in 1 2 3; do
-          if sudo apt-get install -y -qq cmake gcc libdw-dev libelf-dev zlib1g-dev dwarves; then ok=1; break; fi
-          echo "apt install attempt $attempt/3 failed (likely dpkg state); repairing..." >&2
+          echo "apt update/install attempt ${attempt}/3"
+          if sudo apt-get update -qq && \
+             sudo apt-get install -y --no-install-recommends --fix-missing \
+               cmake gcc libdw-dev libelf-dev zlib1g-dev dwarves; then
+            ok=1
+            break
+          fi
+          echo "apt install attempt ${attempt}/3 failed (likely dpkg state or stale mirror); repairing..." >&2
           sudo dpkg --configure -a >/dev/null 2>&1 || true
+          sudo apt-get -f install -y >/dev/null 2>&1 || true
           sleep 5
         done
         [ "$ok" = "1" ] || { echo "ERROR: pahole build deps install failed after 3 attempts" >&2; exit 100; }
