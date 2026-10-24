@@ -847,22 +847,17 @@ jobs:
 
   build-nomount-module:
     needs: resolve-sources
-    # Scheduled (nightly) runs carry NO inputs at all - inputs.use_nomount is
-    # empty, not true - so the inner steps' `if: inputs.use_nomount` gates
-    # would skip everything and produce no metamodule artifact. Compute the
-    # effective flag once here and have the steps key off the job-level
-    # env instead of the raw input.
     if: "(github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.test_release_notes"
     env:
-      NOMOUNT_WANTED: ${{ github.event_name == 'schedule' || inputs.use_nomount || false }}
+      NOMOUNT_WANTED: ${{ inputs.use_nomount == true || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        if: ${{ env.NOMOUNT_WANTED == 'true' || env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == true }}
 
       - name: Clone NoMount source at pinned commit
         id: clone
-        if: ${{ env.NOMOUNT_WANTED == 'true' || env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == true }}
         shell: bash
         run: |
           set -euo pipefail
@@ -875,20 +870,20 @@ jobs:
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
       - name: Build NoMount metamodule (nm only, no .ko)
-        if: ${{ env.NOMOUNT_WANTED == 'true' || env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == true }}
         id: buildmod
         uses: ./.github/actions/nomount-metamodule
         with:
           commit: ${{ steps.clone.outputs.commit }}
 
       - name: Upload NoMount metamodule
-        if: ${{ env.NOMOUNT_WANTED == 'true' || env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == true }}
         uses: actions/upload-artifact@v7
         with:
           name: NoMount-Metamodule
           path: ${{ steps.buildmod.outputs.module_dir }}
           if-no-files-found: error
-          compression-level: 0
+          compression-level: 
 
   build-android12-5-10:
     needs:
@@ -1962,7 +1957,7 @@ jobs:
           fi
 
       - name: Download NoMount metamodule
-        if: ${{ (inputs.use_nomount || github.event_name == 'schedule') && !inputs.test_release_notes }}
+        if: ${{ inputs.use_nomount == true }}
         uses: actions/download-artifact@v7
         with:
           path: release-assets
@@ -1983,7 +1978,7 @@ jobs:
           done
 
       - name: Zip NoMount Metamodule for Release
-        if: ${{ (inputs.use_nomount || github.event_name == 'schedule') && !inputs.test_release_notes }}
+        if: ${{ inputs.use_nomount == true }}
         run: |
           set -e
           shopt -s nullglob
@@ -1992,13 +1987,14 @@ jobs:
             [[ -d "$dir" ]] || continue
             zip_name="${dir}.zip"
             rm -f "$zip_name"
-            cd "$dir"
-            zip -r -q -9 "../$(basename "$zip_name")" .
-            cd - >/dev/null
+            (
+              cd "$dir"
+              zip -r -q -9 "../$(basename "$zip_name")" .
+            )
           done
 
       - name: Verify NoMount metamodule zip
-        if: ${{ (inputs.use_nomount || github.event_name == 'schedule') && !inputs.test_release_notes }}
+        if: ${{ inputs.use_nomount == true }}
         run: |
           set -euo pipefail
           if ! ls release-assets/NoMount-Metamodule.zip >/dev/null 2>&1; then
@@ -2331,7 +2327,7 @@ jobs:
           merge-multiple: false
 
       - name: Download NoMount metamodule
-        if: ${{ (inputs.use_nomount || github.event_name == 'schedule') && !inputs.test_release_notes }}
+        if: ${{ inputs.use_nomount == true }}
         uses: actions/download-artifact@v7
         with:
           path: release-assets
