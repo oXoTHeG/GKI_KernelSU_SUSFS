@@ -37,11 +37,10 @@ runs:
 
         source_dir="${RUNNER_TEMP}/nomount-module-source"
         module_dir="${RUNNER_TEMP}/nomount-metamodule"
-        module_zip="${RUNNER_TEMP}/NoMount-${expected_commit}.zip"
+        module_zip="${RUNNER_TEMP}/NoMount-Metamodule.zip"
         git clone --no-checkout https://github.com/maxsteeel/nomount.git "$source_dir"
         git -C "$source_dir" fetch --depth=1 origin "$expected_commit"
         git -C "$source_dir" checkout --detach "$expected_commit"
-        actual_commit="$(git -C "$source_dir" rev-parse HEAD)"
         if [ "$actual_commit" != "$expected_commit" ]; then
           echo "NoMount module source mismatch: expected $expected_commit, got $actual_commit." >&2
           exit 1
