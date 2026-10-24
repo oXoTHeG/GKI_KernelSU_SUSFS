@@ -1962,11 +1962,13 @@ jobs:
           fi
 
       - name: Download NoMount metamodule
+        if: inputs.use_nomount
         uses: actions/download-artifact@v7
         with:
           path: release-assets
-          pattern: "*NoMount-Metamodule"
+          pattern: "NoMount-Metamodule"
           merge-multiple: false
+          if-no-files-found: error
 
       - name: Zip AnyKernel3 for Release
         run: |
@@ -1982,8 +1984,10 @@ jobs:
           done
 
       - name: Zip NoMount Metamodule for Release
+        if: inputs.use_nomount
+        shell: bash
         run: |
-          set -e
+          set -euo pipefail
           shopt -s nullglob
 
           for dir in release-assets/*NoMount-Metamodule; do
@@ -1994,18 +1998,37 @@ jobs:
             cd - >/dev/null
           done
 
-      - name: Verify NoMount metamodule zip
+      - name: Check NoMount artifact after download
         if: inputs.use_nomount
+        shell: bash
         run: |
           set -euo pipefail
-          # The metamodule silently missed r20 (artifact built fine, no zip
-          # on the release). Fail loud instead of shipping without it.
-          if [ ! -f "release-assets/NoMount-Metamodule.zip" ] && [ ! -d "release-assets/NoMount-Metamodule" ]; then
-            echo "ERROR: NoMount metamodule artifact is missing"
-            ls -la release-assets || true
+
+          echo "release-assets after NoMount download:"
+          find release-assets -maxdepth 2 -printf '%P\n' | sort || true
+
+          if ! find release-assets -maxdepth 2 \
+            \( -name 'NoMount-Metamodule' -o -name 'NoMount-Metamodule.zip' \) \
+            | grep -q .; then
+            echo "ERROR: NoMount metamodule artifact is missing after download" >&2
+            ls -la release-assets >&2 || true
             exit 1
           fi
-            echo "NoMount metamodule zip OK"
+
+      - name: Verify NoMount metamodule zip
+        if: inputs.use_nomount
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if ! ls release-assets/NoMount-Metamodule.zip >/dev/null 2>&1; then
+            echo "ERROR: use_nomount is true but release-assets/NoMount-Metamodule.zip is missing" >&2
+            echo "release-assets directory:" >&2
+            ls -la release-assets >&2 || true
+            exit 1
+          fi
+
+          echo "NoMount metamodule zip OK"
 
       - name: Create Release
         env:
@@ -2330,11 +2353,13 @@ jobs:
           merge-multiple: false
 
       - name: Download NoMount metamodule
+        if: inputs.use_nomount
         uses: actions/download-artifact@v7
         with:
           path: release-assets
-          pattern: '*NoMount-Metamodule'
+          pattern: "NoMount-Metamodule"
           merge-multiple: false
+          if-no-files-found: error
 
       - name: Zip artifacts for Release
         run: |
