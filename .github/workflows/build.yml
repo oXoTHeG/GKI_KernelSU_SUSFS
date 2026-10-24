@@ -774,14 +774,18 @@ jobs:
             resolve_artifact "${{ steps.extract.outputs.file_name }}-AnyKernel3"
           )
           if [ "$NOMOUNT_ENABLED" = "true" ]; then
-            read -r nomount_module_url nomount_module_sha256 < <(
-              resolve_artifact "NoMount-Metamodule"
-            )
+            if ! read -r nomount_module_url nomount_module_sha256 < <(
+                resolve_artifact "NoMount-Metamodule" 2>/dev/null
+              ); then
+              echo "WARN: NoMount-Metamodule artifact missing; continuing with N/A"
+              nomount_module_url="N/A"
+              nomount_module_sha256="N/A"
+            fi
           else
             nomount_module_url="N/A"
             nomount_module_sha256="N/A"
           fi
-
+          
           jq -n \
             --arg method "$METHOD" \
             --arg root_implementation "${ROOT_IMPLEMENTATION:-KernelSU-Next (legacy path)}" \
