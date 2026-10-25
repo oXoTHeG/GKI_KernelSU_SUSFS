@@ -847,17 +847,19 @@ jobs:
 
   build-nomount-module:
     needs: resolve-sources
+    # Job env values are always strings. Compare NOMOUNT_WANTED to 'true'.
+    # `env.NOMOUNT_WANTED == true` is always false, so the upload is skipped.
     if: "(github.event_name == 'workflow_dispatch' || github.event_name == 'schedule') && !inputs.test_release_notes"
     env:
       NOMOUNT_WANTED: ${{ inputs.use_nomount == true || github.event_name == 'schedule' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-        if: ${{ env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == 'true' }}
 
       - name: Clone NoMount source at pinned commit
         id: clone
-        if: ${{ env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == 'true' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -870,20 +872,20 @@ jobs:
           echo "commit=${COMMIT}" >> "$GITHUB_OUTPUT"
 
       - name: Build NoMount metamodule (nm only, no .ko)
-        if: ${{ env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == 'true' }}
         id: buildmod
         uses: ./.github/actions/nomount-metamodule
         with:
           commit: ${{ steps.clone.outputs.commit }}
 
       - name: Upload NoMount metamodule
-        if: ${{ env.NOMOUNT_WANTED == true }}
+        if: ${{ env.NOMOUNT_WANTED == 'true' }}
         uses: actions/upload-artifact@v7
         with:
           name: NoMount-Metamodule
           path: ${{ steps.buildmod.outputs.module_dir }}
           if-no-files-found: error
-          compression-level: 
+          compression-level: 0
 
   build-android12-5-10:
     needs:
@@ -2327,7 +2329,7 @@ jobs:
           merge-multiple: false
 
       - name: Download NoMount metamodule
-        if: ${{ inputs.use_nomount == true }}
+        if: ${{ inputs.use_nomount == true || github.event_name == 'schedule' }}
         uses: actions/download-artifact@v7
         with:
           path: release-assets
